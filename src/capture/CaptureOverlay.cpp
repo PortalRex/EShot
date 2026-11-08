@@ -45,6 +45,7 @@
 #include <QCursor>
 #include <QWindow>
 #include <QClipboard>
+#include <QMimeData>
 #include <QMouseEvent>
 #include <QKeyEvent>
 #include <QDateTime>
@@ -2042,6 +2043,8 @@ void CaptureOverlay::startCaptureInternal(CaptureSelectionMode selectionMode, bo
     m_selectionEnd = QPoint();
     m_selectionAnchorScreenRect = QRect();
     m_windowSnapCandidates.clear();
+    m_namingWindows.clear();
+    m_namingWindowHandles.clear();
 #if defined(Q_OS_UNIX) && !defined(Q_OS_MACOS)
     if (m_kwinWindowList)
         m_kwinWindowList->cancel();
@@ -2187,10 +2190,11 @@ void CaptureOverlay::performCapture()
         ::BringWindowToTop(hwnd);
     }
 
-    if (m_selectionMode == CaptureSelectionMode::Window) {
-        m_windowSnapCandidates = windowsForCaptureOverlay(
-            reinterpret_cast<quintptr>(hwnd), m_captureMonitors, m_virtualDesktopRect);
-    }
+    m_namingWindows = windowsForCaptureOverlay(
+        reinterpret_cast<quintptr>(hwnd), m_captureMonitors, m_virtualDesktopRect,
+        &m_namingWindowHandles);
+    if (m_selectionMode == CaptureSelectionMode::Window)
+        m_windowSnapCandidates = m_namingWindows;
     setHoveredWindowRect(windowSnapTargetForMode(
         m_selectionMode, m_windowSnapCandidates, mapFromGlobal(QCursor::pos()), rect()));
 #elif defined(Q_OS_UNIX) && !defined(Q_OS_MACOS)
@@ -3707,7 +3711,8 @@ void CaptureOverlay::keyPressEvent(QKeyEvent *event)
             m_textJustCommitted = false;
             return;
         }
-        if (m_selectionComplete) onCopyToClipboard();
+        // Enter saves the capture and copies the saved file.
+        if (m_selectionComplete) onSave(true);
     } else if (m_selectionComplete && m_annotationEngine) {
         const int selectedAnnotation = m_annotationEngine->selectedIndex();
         if (selectedAnnotation >= 0
@@ -3966,18 +3971,58 @@ QString CaptureOverlay::resolveFilenamePattern(const QString &pattern) const
     result.replace("%h", now.toString("HH"));
     result.replace("%m", now.toString("mm"));
     result.replace("%s", now.toString("ss"));
+    // Last, so a title or program name containing "%Y" etc. stays as it is.
+    result.replace("%pn", resolveProcessName());
     result = applyWindowTitleToken(result, resolveWindowTitle());
     if (result.trimmed().isEmpty())
         result = QStringLiteral("Screenshot_%1").arg(now.toString(QStringLiteral("yyyy-MM-dd_HH-mm-ss")));
     return result;
 }
 
+// The window the capture shows: the topmost one under the selection's centre,
+// else the window that was active before the overlay opened.
+EShotNativeWindowHandle CaptureOverlay::capturedWindowHandle() const
+{
+#ifdef Q_OS_WIN
+    const QRect selection = normalizedSelectionRect();
+    if (selection.isValid()) {
+        const QPoint centre = selection.center();
+        for (int i = 0; i < m_namingWindows.size() && i < m_namingWindowHandles.size(); ++i) {
+            const HWND hwnd = reinterpret_cast<HWND>(m_namingWindowHandles[i]);
+            if (m_namingWindows[i].contains(centre) && IsWindow(hwnd))
+                return hwnd;
+        }
+    }
+    return m_foregroundHwnd ? m_foregroundHwnd : GetForegroundWindow();
+#else
+    return nullptr;
+#endif
+}
+
+// Executable name without ".exe" (ShareX's %pn), e.g. "Discord".
+QString CaptureOverlay::resolveProcessName() const
+{
+#ifdef Q_OS_WIN
+    if (HWND hwnd = capturedWindowHandle()) {
+        DWORD processId = 0;
+        GetWindowThreadProcessId(hwnd, &processId);
+        if (HANDLE process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, processId)) {
+            wchar_t path[MAX_PATH];
+            DWORD size = MAX_PATH;
+            const bool ok = QueryFullProcessImageNameW(process, 0, path, &size);
+            CloseHandle(process);
+            if (ok)
+                return QFileInfo(QString::fromWCharArray(path, size)).completeBaseName();
+        }
+    }
+#endif
+    return QStringLiteral("Screenshot");
+}
+
 QString CaptureOverlay::resolveWindowTitle() const
 {
 #ifdef Q_OS_WIN
-    // Use saved foreground window (the one active before overlay)
-    HWND hwnd = m_foregroundHwnd;
-    if (!hwnd) hwnd = GetForegroundWindow();
+    HWND hwnd = capturedWindowHandle();
     if (hwnd) {
         wchar_t title[256];
         int len = GetWindowTextW(hwnd, title, 256);
@@ -5355,23 +5400,32 @@ void CaptureOverlay::onCopyToClipboard()
     }
 }
 
-void CaptureOverlay::onSave()
+void CaptureOverlay::onSave(bool copyFile)
 {
     QPixmap result = getSelectedPixmap();
     if (result.isNull()) return;
 
     QString error;
-    if (!saveScreenshotFile(result, true, &error)) {
+    QString savedPath;
+    if (!saveScreenshotFile(result, true, &error, &savedPath)) {
         // Explains Controlled folder access when that is the likely cause and
         // keeps the image on the clipboard.
         ProtectedFolderHint::warnScreenshotSaveFailed(this, TranslationManager::errTitle(),
                                                       m_lastFailedSavePath, result, error);
         return;
     }
+    if (copyFile) {
+        // The file reference for Explorer and chats, plus the pixels for image editors.
+        auto *data = new QMimeData;
+        data->setUrls({QUrl::fromLocalFile(savedPath)});
+        data->setImageData(result.toImage());
+        QGuiApplication::clipboard()->setMimeData(data);
+    }
     finishCapture();
 }
 
-bool CaptureOverlay::saveScreenshotFile(const QPixmap &result, bool useCliPath, QString *error)
+bool CaptureOverlay::saveScreenshotFile(const QPixmap &result, bool useCliPath, QString *error,
+                                        QString *savedPath)
 {
     QSettings s("EShot", "EShot");
     QString cliFullPath = useCliPath ? s.value("cliSaveFullPath").toString() : QString();
@@ -5450,6 +5504,8 @@ bool CaptureOverlay::saveScreenshotFile(const QPixmap &result, bool useCliPath, 
             *error = TranslationManager::tr("errSaveFile") + QDir::toNativeSeparators(filename);
         return false;
     }
+    if (savedPath)
+        *savedPath = filename;
     return true;
 }
 

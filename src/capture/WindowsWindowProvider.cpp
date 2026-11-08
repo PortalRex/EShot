@@ -19,7 +19,8 @@ QRect overlayLocalWindowRect(const QRect &physicalWindowRect,
 
 QVector<QRect> windowsForCaptureOverlay(quintptr overlayWindowId,
                                         const QVector<CaptureMonitorGeometry> &monitors,
-                                        const QRect &virtualDesktopRect)
+                                        const QRect &virtualDesktopRect,
+                                        QVector<quintptr> *handles)
 {
 #ifdef Q_OS_WIN
     struct EnumerationContext {
@@ -28,6 +29,7 @@ QVector<QRect> windowsForCaptureOverlay(quintptr overlayWindowId,
         const QVector<CaptureMonitorGeometry> *monitors = nullptr;
         const QRect *virtualDesktopRect = nullptr;
         QVector<QRect> windows;
+        QVector<quintptr> handles;
     } context;
 
     context.overlay = reinterpret_cast<HWND>(overlayWindowId);
@@ -82,16 +84,22 @@ QVector<QRect> windowsForCaptureOverlay(quintptr overlayWindowId,
 
         const QRect local = overlayLocalWindowRect(physical, *ctx->monitors,
                                                    *ctx->virtualDesktopRect);
-        if (local.width() >= 16 && local.height() >= 16)
+        if (local.width() >= 16 && local.height() >= 16) {
             ctx->windows.append(local);
+            ctx->handles.append(reinterpret_cast<quintptr>(hwnd));
+        }
         return TRUE;
     }, reinterpret_cast<LPARAM>(&context));
 
+    if (handles)
+        *handles = context.handles;
     return context.windows;
 #else
     Q_UNUSED(overlayWindowId)
     Q_UNUSED(monitors)
     Q_UNUSED(virtualDesktopRect)
+    if (handles)
+        handles->clear();
     return {};
 #endif
 }

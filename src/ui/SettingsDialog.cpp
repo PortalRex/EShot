@@ -323,6 +323,7 @@ QString SettingsDialog::resolvePatternPreview(const QString &pattern) const
     r.replace("%h", now.toString("HH"));
     r.replace("%m", now.toString("mm"));
     r.replace("%s", now.toString("ss"));
+    r.replace("%pn", "Program");
     r.replace("%T", "WindowTitle");
     return r;
 }

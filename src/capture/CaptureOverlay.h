@@ -158,9 +158,13 @@ private:
     // Filename template parse
     QString resolveFilenamePattern(const QString &pattern) const;
     QString resolveWindowTitle() const;
+    QString resolveProcessName() const;
+    EShotNativeWindowHandle capturedWindowHandle() const;
     // Saves to the screenshot folder with the file name pattern and emits
-    // captureSaved. useCliPath consumes a pending --save path.
-    bool saveScreenshotFile(const QPixmap &image, bool useCliPath, QString *error);
+    // captureSaved. useCliPath consumes a pending --save path. savedPath
+    // (optional) receives the written file.
+    bool saveScreenshotFile(const QPixmap &image, bool useCliPath, QString *error,
+                            QString *savedPath = nullptr);
     // Target of the last failed saveScreenshotFile(), for the CFA hint.
     QString m_lastFailedSavePath;
 
@@ -176,6 +180,10 @@ private:
     bool m_ignoreNextMouseRelease;
     QPoint m_moveOffset;
     QVector<QRect> m_windowSnapCandidates;
+    // Windows on screen when the capture started, topmost first, with their
+    // handles; names the file after the window under the selection (%T, %pn).
+    QVector<QRect> m_namingWindows;
+    QVector<quintptr> m_namingWindowHandles;
     QRect m_hoveredWindowRect;
     QRect m_animatedWindowRect;
     QRect m_windowSnapAnimationStart;
@@ -412,7 +420,8 @@ private:
 private slots:
     void onToolSelected(int toolId);
     void onCopyToClipboard();
-    void onSave();
+    // copyFile: after saving, put the saved file (and its pixels) on the clipboard.
+    void onSave(bool copyFile = false);
     void onClose();
     void onPinToDesktop();
     void onEyedropperRequested();
