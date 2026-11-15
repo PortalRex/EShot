@@ -31,6 +31,33 @@ private slots:
         QVERIFY(topmostWindowAt(windows, QPoint(500, 500), QRect(0, 0, 1920, 1080)).isEmpty());
     }
 
+    void prefersSmallestControlInsideTopmostWindow()
+    {
+        const QRect overlay(0, 0, 1920, 1080);
+        const QVector<QRect> windows = {
+            QRect(100, 100, 800, 600),
+            QRect(0, 0, 1920, 1080)
+        };
+        const QVector<QVector<QRect>> controls = {
+            { QRect(100, 130, 800, 570), QRect(120, 150, 200, 40) },
+            { QRect(1000, 100, 300, 300) }
+        };
+
+        // Inside both controls: the smaller one wins.
+        QCOMPARE(windowOrControlAt(windows, controls, QPoint(150, 160), overlay),
+                 QRect(120, 150, 200, 40));
+        // Title bar: no control there, so the whole window.
+        QCOMPARE(windowOrControlAt(windows, controls, QPoint(500, 110), overlay),
+                 windows.first());
+        // Controls of a window lower in z-order never leak through the top one.
+        QCOMPARE(windowOrControlAt(windows, controls, QPoint(1100, 200), overlay),
+                 QRect(1000, 100, 300, 300));
+        // No controls list behaves like topmostWindowAt.
+        QCOMPARE(windowOrControlAt(windows, {}, QPoint(150, 160), overlay),
+                 windows.first());
+        QVERIFY(windowOrControlAt(windows, controls, QPoint(2000, 10), overlay).isEmpty());
+    }
+
     void distinguishesClickFromManualDrag()
     {
         QVERIFY(isWindowSnapClick(QPoint(100, 100), QPoint(103, 102), 10));

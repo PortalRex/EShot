@@ -103,3 +103,77 @@ QVector<QRect> windowsForCaptureOverlay(quintptr overlayWindowId,
     return {};
 #endif
 }
+
+QVector<QVector<QRect>> controlsForCaptureWindows(const QVector<quintptr> &handles,
+                                                  const QVector<QRect> &windowRects,
+                                                  const QVector<CaptureMonitorGeometry> &monitors,
+                                                  const QRect &virtualDesktopRect)
+{
+    QVector<QVector<QRect>> result(handles.size());
+#ifdef Q_OS_WIN
+    // Caps keep the overlay quick to open when a program has huge control trees.
+    constexpr int kMaxControlsPerWindow = 1000;
+    constexpr int kMaxControlsTotal = 5000;
+
+    struct ChildContext {
+        const QVector<CaptureMonitorGeometry> *monitors = nullptr;
+        const QRect *virtualDesktopRect = nullptr;
+        QRect window;
+        QVector<QRect> controls;
+        int budget = 0;
+    };
+
+    int remaining = kMaxControlsTotal;
+    for (int i = 0; i < handles.size() && remaining > 0; ++i) {
+        const HWND hwnd = reinterpret_cast<HWND>(handles[i]);
+        if (!IsWindow(hwnd) || i >= windowRects.size())
+            continue;
+
+        ChildContext context;
+        context.monitors = &monitors;
+        context.virtualDesktopRect = &virtualDesktopRect;
+        context.window = windowRects[i];
+        context.budget = qMin(kMaxControlsPerWindow, remaining);
+
+        // EnumChildWindows walks every descendant, not just direct children.
+        EnumChildWindows(hwnd, [](HWND child, LPARAM parameter) -> BOOL {
+            auto *ctx = reinterpret_cast<ChildContext *>(parameter);
+            if (ctx->budget <= 0)
+                return FALSE;
+            // IsWindowVisible also checks every ancestor, so controls on
+            // hidden tab pages are skipped.
+            if (!IsWindowVisible(child))
+                return TRUE;
+            if (GetWindowLongPtrW(child, GWL_EXSTYLE) & WS_EX_TRANSPARENT)
+                return TRUE;
+
+            RECT nativeRect = {};
+            if (!GetWindowRect(child, &nativeRect))
+                return TRUE;
+            const QRect physical(nativeRect.left, nativeRect.top,
+                                 nativeRect.right - nativeRect.left,
+                                 nativeRect.bottom - nativeRect.top);
+            if (physical.width() < 8 || physical.height() < 8)
+                return TRUE;
+
+            const QRect local = overlayLocalWindowRect(physical, *ctx->monitors,
+                                                       *ctx->virtualDesktopRect)
+                                    .intersected(ctx->window);
+            // A control filling the whole window adds nothing to snap to.
+            if (local.width() >= 8 && local.height() >= 8 && local != ctx->window) {
+                ctx->controls.append(local);
+                --ctx->budget;
+            }
+            return TRUE;
+        }, reinterpret_cast<LPARAM>(&context));
+
+        remaining -= context.controls.size();
+        result[i] = context.controls;
+    }
+#else
+    Q_UNUSED(windowRects)
+    Q_UNUSED(monitors)
+    Q_UNUSED(virtualDesktopRect)
+#endif
+    return result;
+}

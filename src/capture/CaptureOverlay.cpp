@@ -2044,6 +2044,7 @@ void CaptureOverlay::startCaptureInternal(CaptureSelectionMode selectionMode, bo
     m_selectionEnd = QPoint();
     m_selectionAnchorScreenRect = QRect();
     m_windowSnapCandidates.clear();
+    m_windowSnapControls.clear();
     m_namingWindows.clear();
     m_namingWindowHandles.clear();
 #if defined(Q_OS_UNIX) && !defined(Q_OS_MACOS)
@@ -2101,6 +2102,7 @@ void CaptureOverlay::startCaptureInternal(CaptureSelectionMode selectionMode, bo
     m_copyAfterCapture = s.value("copyAfterCapture", true).toBool();
     m_closeAfterCopy = s.value("closeAfterCopy", true).toBool();
     m_regionWindowSnap = s.value("regionWindowSnap", true).toBool();
+    m_regionControlSnap = s.value("regionControlSnap", true).toBool();
     m_instantCopyAfterSelection = s.value("instantCopyAfterSelection", false).toBool();
     m_autoLockSelection = s.value("autoLockSelection", false).toBool();
     if (m_quickAutoLockSelectionCheck) {
@@ -2197,8 +2199,12 @@ void CaptureOverlay::performCapture()
         &m_namingWindowHandles);
     if (windowSnapMode() == CaptureSelectionMode::Window)
         m_windowSnapCandidates = m_namingWindows;
-    setHoveredWindowRect(windowSnapTargetForMode(
-        windowSnapMode(), m_windowSnapCandidates, mapFromGlobal(QCursor::pos()), rect()));
+    if (m_selectionMode == CaptureSelectionMode::FreeRegion && m_regionWindowSnap
+        && m_regionControlSnap) {
+        m_windowSnapControls = controlsForCaptureWindows(
+            m_namingWindowHandles, m_namingWindows, m_captureMonitors, m_virtualDesktopRect);
+    }
+    setHoveredWindowRect(windowSnapTargetAt(mapFromGlobal(QCursor::pos())));
 #elif defined(Q_OS_UNIX) && !defined(Q_OS_MACOS)
     applyKdeWindowList();
 #endif
@@ -3330,8 +3336,7 @@ void CaptureOverlay::mouseMoveEvent(QMouseEvent *event)
                 m_selectionAnchorScreenRect = monitorRectAt(m_windowSnapPressPosition);
                 hideToolbar();
             } else {
-                setHoveredWindowRect(windowSnapTargetForMode(
-                    windowSnapMode(), m_windowSnapCandidates, event->pos(), rect()));
+                setHoveredWindowRect(windowSnapTargetAt(event->pos()));
             }
         }
         update();
@@ -3517,8 +3522,7 @@ void CaptureOverlay::mouseMoveEvent(QMouseEvent *event)
             }
         }
     } else if (!m_selectionComplete) {
-        const QRect hovered = windowSnapTargetForMode(
-            windowSnapMode(), m_windowSnapCandidates, event->pos(), rect());
+        const QRect hovered = windowSnapTargetAt(event->pos());
         if (hovered != m_hoveredWindowRect) {
             m_crosshairPosition = event->pos();
             m_hasCrosshairPosition = true;
@@ -5031,6 +5035,17 @@ CaptureSelectionMode CaptureOverlay::windowSnapMode() const
         return CaptureSelectionMode::Window;
 #endif
     return m_selectionMode;
+}
+
+QRect CaptureOverlay::windowSnapTargetAt(const QPoint &point) const
+{
+    if (windowSnapMode() != CaptureSelectionMode::Window)
+        return {};
+    // Controls are only gathered for region capture; "Capture Window" mode
+    // always takes whole windows.
+    if (!m_windowSnapControls.isEmpty())
+        return windowOrControlAt(m_windowSnapCandidates, m_windowSnapControls, point, rect());
+    return topmostWindowAt(m_windowSnapCandidates, point, rect());
 }
 
 #if defined(Q_OS_UNIX) && !defined(Q_OS_MACOS)

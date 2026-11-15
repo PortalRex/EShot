@@ -17,6 +17,14 @@ bool isWindowSnapClick(const QPoint &pressPosition,
                        const QPoint &releasePosition,
                        int dragThreshold);
 
+// Like topmostWindowAt, but inside the topmost window it prefers the
+// smallest control (child window) under the point. controls[i] holds the
+// controls of windows[i]; a window without controls snaps as a whole.
+QRect windowOrControlAt(const QVector<QRect> &windows,
+                        const QVector<QVector<QRect>> &controls,
+                        const QPoint &point,
+                        const QRect &overlayBounds);
+
 QRect windowSnapTargetForMode(CaptureSelectionMode mode,
                               const QVector<QRect> &windows,
                               const QPoint &point,

@@ -959,6 +959,17 @@ QWidget* SettingsDialog::createCaptureTab()
     m_regionWindowSnapCheck = new QCheckBox(TranslationManager::tr("regionWindowSnap"));
     m_regionWindowSnapCheck->setToolTip(TranslationManager::tr("tipRegionWindowSnap"));
     capLayout->addRow(m_regionWindowSnapCheck);
+    // Sub-option of window snapping, indented under it and greyed out when
+    // window snapping is off.
+    m_regionControlSnapCheck = new QCheckBox(TranslationManager::tr("regionControlSnap"));
+    m_regionControlSnapCheck->setToolTip(TranslationManager::tr("tipRegionControlSnap"));
+    auto *controlSnapRow = new QWidget;
+    auto *controlSnapLayout = new QHBoxLayout(controlSnapRow);
+    controlSnapLayout->setContentsMargins(20, 0, 0, 0);
+    controlSnapLayout->addWidget(m_regionControlSnapCheck);
+    capLayout->addRow(controlSnapRow);
+    connect(m_regionWindowSnapCheck, &QCheckBox::toggled,
+            m_regionControlSnapCheck, &QWidget::setEnabled);
 #endif
     m_rememberLastAnnotationToolCheck = new QCheckBox(TranslationManager::rememberLastAnnotationTool());
     m_rememberLastAnnotationToolCheck->setToolTip(TranslationManager::rememberLastAnnotationToolHint());
@@ -2319,6 +2330,11 @@ void SettingsDialog::loadSettings()
     m_closeAfterCopyCheck->setChecked(m_settings->value("closeAfterCopy", true).toBool());
     if (m_regionWindowSnapCheck)
         m_regionWindowSnapCheck->setChecked(m_settings->value("regionWindowSnap", true).toBool());
+    if (m_regionControlSnapCheck) {
+        m_regionControlSnapCheck->setChecked(m_settings->value("regionControlSnap", true).toBool());
+        m_regionControlSnapCheck->setEnabled(!m_regionWindowSnapCheck
+                                             || m_regionWindowSnapCheck->isChecked());
+    }
     if (m_instantCopyAfterSelectionCheck)
         m_instantCopyAfterSelectionCheck->setChecked(m_settings->value("instantCopyAfterSelection", false).toBool());
     if (m_rememberLastAnnotationToolCheck)
@@ -2970,6 +2986,8 @@ void SettingsDialog::onSave()
     m_settings->setValue("closeAfterCopy",     m_closeAfterCopyCheck->isChecked());
     if (m_regionWindowSnapCheck)
         m_settings->setValue("regionWindowSnap", m_regionWindowSnapCheck->isChecked());
+    if (m_regionControlSnapCheck)
+        m_settings->setValue("regionControlSnap", m_regionControlSnapCheck->isChecked());
     m_settings->setValue("instantCopyAfterSelection",
                          m_instantCopyAfterSelectionCheck ? m_instantCopyAfterSelectionCheck->isChecked() : false);
     m_settings->setValue("rememberLastAnnotationTool",
@@ -3157,6 +3175,8 @@ void SettingsDialog::onExportSettings()
     obj["closeAfterCopy"] = m_closeAfterCopyCheck->isChecked();
     if (m_regionWindowSnapCheck)
         obj["regionWindowSnap"] = m_regionWindowSnapCheck->isChecked();
+    if (m_regionControlSnapCheck)
+        obj["regionControlSnap"] = m_regionControlSnapCheck->isChecked();
     obj["instantCopyAfterSelection"] = m_instantCopyAfterSelectionCheck ? m_instantCopyAfterSelectionCheck->isChecked() : false;
     obj["rememberLastAnnotationTool"] = m_rememberLastAnnotationToolCheck ? m_rememberLastAnnotationToolCheck->isChecked() : false;
     obj["autoLockSelection"] = m_autoLockSelectionCheck ? m_autoLockSelectionCheck->isChecked() : false;
@@ -3325,6 +3345,8 @@ void SettingsDialog::onImportSettings()
     if (obj.contains("closeAfterCopy")) m_closeAfterCopyCheck->setChecked(obj["closeAfterCopy"].toBool());
     if (m_regionWindowSnapCheck && obj.contains("regionWindowSnap"))
         m_regionWindowSnapCheck->setChecked(obj["regionWindowSnap"].toBool());
+    if (m_regionControlSnapCheck && obj.contains("regionControlSnap"))
+        m_regionControlSnapCheck->setChecked(obj["regionControlSnap"].toBool());
     if (m_instantCopyAfterSelectionCheck && obj.contains("instantCopyAfterSelection"))
         m_instantCopyAfterSelectionCheck->setChecked(obj["instantCopyAfterSelection"].toBool());
     if (m_rememberLastAnnotationToolCheck && obj.contains("rememberLastAnnotationTool"))

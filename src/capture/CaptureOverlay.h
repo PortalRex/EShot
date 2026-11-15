@@ -131,6 +131,8 @@ private:
     // Window mode, or a region capture that snaps to the window under the
     // cursor (click takes the window, drag still selects a free region).
     CaptureSelectionMode windowSnapMode() const;
+    // The window, or control inside it, that a click at point would take.
+    QRect windowSnapTargetAt(const QPoint &point) const;
 #if defined(Q_OS_UNIX) && !defined(Q_OS_MACOS)
     // KDE window selection: KWin's window list arrives asynchronously while
     // the screenshot is taken and fills m_windowSnapCandidates once both
@@ -183,6 +185,8 @@ private:
     bool m_ignoreNextMouseRelease;
     QPoint m_moveOffset;
     QVector<QRect> m_windowSnapCandidates;
+    // Controls of each snap candidate, same index (region capture on Windows).
+    QVector<QVector<QRect>> m_windowSnapControls;
     // Windows on screen when the capture started, topmost first, with their
     // handles; names the file after the window under the selection (%T, %pn).
     QVector<QRect> m_namingWindows;
@@ -403,6 +407,7 @@ private:
     bool m_copyAfterCapture;
     bool m_closeAfterCopy;
     bool m_regionWindowSnap = true;
+    bool m_regionControlSnap = true;
     bool m_instantCopyAfterSelection;
     bool m_showCaptureHints;
     bool m_showHighlighterStraightHint = false;
