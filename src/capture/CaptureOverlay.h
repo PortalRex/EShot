@@ -128,6 +128,9 @@ private:
     QRegion visibleSelectionUiRegion() const;
     void setHoveredWindowRect(const QRect &targetRect);
     bool manualSelectionAllowed() const;
+    // Window mode, or a region capture that snaps to the window under the
+    // cursor (click takes the window, drag still selects a free region).
+    CaptureSelectionMode windowSnapMode() const;
 #if defined(Q_OS_UNIX) && !defined(Q_OS_MACOS)
     // KDE window selection: KWin's window list arrives asynchronously while
     // the screenshot is taken and fills m_windowSnapCandidates once both
@@ -399,6 +402,7 @@ private:
     // Settings
     bool m_copyAfterCapture;
     bool m_closeAfterCopy;
+    bool m_regionWindowSnap = true;
     bool m_instantCopyAfterSelection;
     bool m_showCaptureHints;
     bool m_showHighlighterStraightHint = false;

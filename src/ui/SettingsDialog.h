@@ -149,6 +149,7 @@ private:
     QSpinBox *m_delaySpin = nullptr;
     QCheckBox *m_copyAfterCaptureCheck = nullptr;
     QCheckBox *m_closeAfterCopyCheck = nullptr;
+    QCheckBox *m_regionWindowSnapCheck = nullptr;
     QCheckBox *m_instantCopyAfterSelectionCheck = nullptr;
     QCheckBox *m_rememberLastAnnotationToolCheck = nullptr;
     QCheckBox *m_autoLockSelectionCheck = nullptr;

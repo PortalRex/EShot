@@ -2100,6 +2100,7 @@ void CaptureOverlay::startCaptureInternal(CaptureSelectionMode selectionMode, bo
     m_crosshairStyle = s.value("crosshairStyle", "dash").toString();
     m_copyAfterCapture = s.value("copyAfterCapture", true).toBool();
     m_closeAfterCopy = s.value("closeAfterCopy", true).toBool();
+    m_regionWindowSnap = s.value("regionWindowSnap", true).toBool();
     m_instantCopyAfterSelection = s.value("instantCopyAfterSelection", false).toBool();
     m_autoLockSelection = s.value("autoLockSelection", false).toBool();
     if (m_quickAutoLockSelectionCheck) {
@@ -2194,10 +2195,10 @@ void CaptureOverlay::performCapture()
     m_namingWindows = windowsForCaptureOverlay(
         reinterpret_cast<quintptr>(hwnd), m_captureMonitors, m_virtualDesktopRect,
         &m_namingWindowHandles);
-    if (m_selectionMode == CaptureSelectionMode::Window)
+    if (windowSnapMode() == CaptureSelectionMode::Window)
         m_windowSnapCandidates = m_namingWindows;
     setHoveredWindowRect(windowSnapTargetForMode(
-        m_selectionMode, m_windowSnapCandidates, mapFromGlobal(QCursor::pos()), rect()));
+        windowSnapMode(), m_windowSnapCandidates, mapFromGlobal(QCursor::pos()), rect()));
 #elif defined(Q_OS_UNIX) && !defined(Q_OS_MACOS)
     applyKdeWindowList();
 #endif
@@ -3330,7 +3331,7 @@ void CaptureOverlay::mouseMoveEvent(QMouseEvent *event)
                 hideToolbar();
             } else {
                 setHoveredWindowRect(windowSnapTargetForMode(
-                    m_selectionMode, m_windowSnapCandidates, event->pos(), rect()));
+                    windowSnapMode(), m_windowSnapCandidates, event->pos(), rect()));
             }
         }
         update();
@@ -3517,7 +3518,7 @@ void CaptureOverlay::mouseMoveEvent(QMouseEvent *event)
         }
     } else if (!m_selectionComplete) {
         const QRect hovered = windowSnapTargetForMode(
-            m_selectionMode, m_windowSnapCandidates, event->pos(), rect());
+            windowSnapMode(), m_windowSnapCandidates, event->pos(), rect());
         if (hovered != m_hoveredWindowRect) {
             m_crosshairPosition = event->pos();
             m_hasCrosshairPosition = true;
@@ -5021,6 +5022,15 @@ bool CaptureOverlay::manualSelectionAllowed() const
 #else
     return allowsManualSelection(m_selectionMode);
 #endif
+}
+
+CaptureSelectionMode CaptureOverlay::windowSnapMode() const
+{
+#ifdef Q_OS_WIN
+    if (m_selectionMode == CaptureSelectionMode::FreeRegion && m_regionWindowSnap)
+        return CaptureSelectionMode::Window;
+#endif
+    return m_selectionMode;
 }
 
 #if defined(Q_OS_UNIX) && !defined(Q_OS_MACOS)

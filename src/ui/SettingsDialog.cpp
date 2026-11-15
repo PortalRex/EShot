@@ -955,6 +955,11 @@ QWidget* SettingsDialog::createCaptureTab()
     m_instantCopyAfterSelectionCheck->setToolTip(TranslationManager::tr("tipInstantCopyAfterSelection"));
     capLayout->addRow(m_closeAfterCopyCheck);
     capLayout->addRow(m_instantCopyAfterSelectionCheck);
+#ifdef Q_OS_WIN
+    m_regionWindowSnapCheck = new QCheckBox(TranslationManager::tr("regionWindowSnap"));
+    m_regionWindowSnapCheck->setToolTip(TranslationManager::tr("tipRegionWindowSnap"));
+    capLayout->addRow(m_regionWindowSnapCheck);
+#endif
     m_rememberLastAnnotationToolCheck = new QCheckBox(TranslationManager::rememberLastAnnotationTool());
     m_rememberLastAnnotationToolCheck->setToolTip(TranslationManager::rememberLastAnnotationToolHint());
     capLayout->addRow(m_rememberLastAnnotationToolCheck);
@@ -2312,6 +2317,8 @@ void SettingsDialog::loadSettings()
     m_delaySpin->setValue(m_settings->value("captureDelay", 0).toInt());
     m_copyAfterCaptureCheck->setChecked(false);
     m_closeAfterCopyCheck->setChecked(m_settings->value("closeAfterCopy", true).toBool());
+    if (m_regionWindowSnapCheck)
+        m_regionWindowSnapCheck->setChecked(m_settings->value("regionWindowSnap", true).toBool());
     if (m_instantCopyAfterSelectionCheck)
         m_instantCopyAfterSelectionCheck->setChecked(m_settings->value("instantCopyAfterSelection", false).toBool());
     if (m_rememberLastAnnotationToolCheck)
@@ -2961,6 +2968,8 @@ void SettingsDialog::onSave()
     m_settings->setValue("captureDelay",       m_delaySpin->value());
     m_settings->setValue("copyAfterCapture",   false);
     m_settings->setValue("closeAfterCopy",     m_closeAfterCopyCheck->isChecked());
+    if (m_regionWindowSnapCheck)
+        m_settings->setValue("regionWindowSnap", m_regionWindowSnapCheck->isChecked());
     m_settings->setValue("instantCopyAfterSelection",
                          m_instantCopyAfterSelectionCheck ? m_instantCopyAfterSelectionCheck->isChecked() : false);
     m_settings->setValue("rememberLastAnnotationTool",
@@ -3146,6 +3155,8 @@ void SettingsDialog::onExportSettings()
     obj["captureDelay"] = m_delaySpin->value();
     obj["copyAfterCapture"] = false;
     obj["closeAfterCopy"] = m_closeAfterCopyCheck->isChecked();
+    if (m_regionWindowSnapCheck)
+        obj["regionWindowSnap"] = m_regionWindowSnapCheck->isChecked();
     obj["instantCopyAfterSelection"] = m_instantCopyAfterSelectionCheck ? m_instantCopyAfterSelectionCheck->isChecked() : false;
     obj["rememberLastAnnotationTool"] = m_rememberLastAnnotationToolCheck ? m_rememberLastAnnotationToolCheck->isChecked() : false;
     obj["autoLockSelection"] = m_autoLockSelectionCheck ? m_autoLockSelectionCheck->isChecked() : false;
@@ -3312,6 +3323,8 @@ void SettingsDialog::onImportSettings()
     if (obj.contains("captureDelay")) m_delaySpin->setValue(obj["captureDelay"].toInt());
     if (obj.contains("copyAfterCapture")) m_copyAfterCaptureCheck->setChecked(false);
     if (obj.contains("closeAfterCopy")) m_closeAfterCopyCheck->setChecked(obj["closeAfterCopy"].toBool());
+    if (m_regionWindowSnapCheck && obj.contains("regionWindowSnap"))
+        m_regionWindowSnapCheck->setChecked(obj["regionWindowSnap"].toBool());
     if (m_instantCopyAfterSelectionCheck && obj.contains("instantCopyAfterSelection"))
         m_instantCopyAfterSelectionCheck->setChecked(obj["instantCopyAfterSelection"].toBool());
     if (m_rememberLastAnnotationToolCheck && obj.contains("rememberLastAnnotationTool"))
