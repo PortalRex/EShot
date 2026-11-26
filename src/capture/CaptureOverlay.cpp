@@ -3998,6 +3998,10 @@ EShotNativeWindowHandle CaptureOverlay::capturedWindowHandle() const
             if (m_namingWindows[i].contains(centre) && IsWindow(hwnd))
                 return hwnd;
         }
+        // Nothing under the selection (an empty monitor): no program to name
+        // it after, rather than whichever window happened to have focus.
+        if (!m_namingWindows.isEmpty())
+            return nullptr;
     }
     return m_foregroundHwnd ? m_foregroundHwnd : GetForegroundWindow();
 #else
@@ -5043,9 +5047,14 @@ QRect CaptureOverlay::windowSnapTargetAt(const QPoint &point) const
         return {};
     // Controls are only gathered for region capture; "Capture Window" mode
     // always takes whole windows.
-    if (!m_windowSnapControls.isEmpty())
-        return windowOrControlAt(m_windowSnapCandidates, m_windowSnapControls, point, rect());
-    return topmostWindowAt(m_windowSnapCandidates, point, rect());
+    const QRect target = m_windowSnapControls.isEmpty()
+        ? topmostWindowAt(m_windowSnapCandidates, point, rect())
+        : windowOrControlAt(m_windowSnapCandidates, m_windowSnapControls, point, rect());
+    // Region capture over the desktop, taskbar or a live wallpaper (no window
+    // there) snaps to that whole monitor, like ShareX.
+    if (target.isEmpty() && m_selectionMode == CaptureSelectionMode::FreeRegion)
+        return monitorRectAt(point);
+    return target;
 }
 
 #if defined(Q_OS_UNIX) && !defined(Q_OS_MACOS)
